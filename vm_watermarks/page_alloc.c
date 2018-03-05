@@ -1,4 +1,14 @@
 
+/**
+Code read of 4.13 linux kernel on how watermarks get calculate
+Code does various watermark calculation which can be seen in form of google sheet below
+https://docs.google.com/spreadsheets/d/1FBHGPk6p0uui7Ned5mzWQHHa9nFDD329PijRW_kXB6A/edit#gid=576868409
+**/
+
+
+
+
+
 
 /**
  * setup_per_zone_wmarks - called when min_free_kbytes changes
