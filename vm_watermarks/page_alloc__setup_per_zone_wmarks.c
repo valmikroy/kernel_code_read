@@ -179,3 +179,219 @@ int j = i << 2; // makes it binary 10000, which multiplies the original number b
         calculate_totalreserve_pages();
 }
 
+
+
+
+
+/*
+ * setup_per_zone_lowmem_reserve - called whenever
+ *      sysctl_lowmem_reserve_ratio changes.  Ensures that each zone
+ *      has a correct pages reserved value, so an adequate number of
+ *      pages are left in the zone after a successful __alloc_pages().
+ */
+
+
+/*
+* note that 
+*
+*
+*/
+static void setup_per_zone_lowmem_reserve(void)
+{
+
+       /*
+        * pglist_data defined in include/linux/mmzone.h 
+        * each pglist_data structure defines mem page layout
+        * for each zone.
+        * 
+        *
+        * pglist_data has assigned per NUMA node
+        *
+        *
+        *
+        *
+        */
+        struct pglist_data *pgdat;
+        enum zone_type j, idx;
+
+        // Iterate through each NUMA
+        for_each_online_pgdat(pgdat) {
+
+
+                // Following loop through zones on given NUMA node
+                for (j = 0; j < MAX_NR_ZONES; j++) {
+
+
+                        /*
+                        * struct zone is defined in include/linux/mmzone.h
+                        * 
+                        * lowmem_reserve[] used from zone structure is an array with size 5
+                        * and lowmem_reserve[0] is always zero
+                        * this keeps protection page count for each zone
+                        *
+                        *
+                        */
+                        // this might be pulling zone
+                        struct zone *zone = pgdat->node_zones + j;
+                        unsigned long managed_pages = zone->managed_pages;
+
+                        // initialize here to get it used by while (idx) loop
+
+                        zone->lowmem_reserve[j] = 0;
+
+                        // idx=j because digits in  sysctl_lowmem_reserve_ratio and
+                        // number of zones are the same 
+                        
+                        idx = j;
+
+
+
+                        /*
+                        *  Lets take example of vm.lowmem_reserve_ratio = 256   256     32      1
+                        *  zone , size  , spanned , present, managed 
+                        *  ZONE_DMA , 16M , 4095 , 3993 , 3972
+                        *  ZONE_DMA32 , 4G , 1044480 , 492878 , 476486 
+                        *  ZONE_Normal0, 30G, 7864320, 7864320, 7728372
+                        *  ZONE_Normal1, 32G, 8388608, 8388608, 8256805
+
+                           * spanned_pages is the total pages spanned by the zone, including
+                           * holes, which is calculated as:
+                           *      spanned_pages = zone_end_pfn - zone_start_pfn;
+                           *
+                           * present_pages is physical pages existing within the zone, which
+                           * is calculated as:
+                           *      present_pages = spanned_pages - absent_pages(pages in holes);
+                           *
+                           * managed_pages is present pages managed by the buddy system, which
+                           * is calculated as (reserved_pages includes pages allocated by the
+                           * bootmem allocator):
+                           *      managed_pages = present_pages - reserved_pages;
+                           *
+                           * So present_pages may be used by memory hotplug or memory power
+                           * management logic to figure out unmanaged pages by checking
+                           * (present_pages - managed_pages). And managed_pages should be used
+                           * by page allocator and vm scanner to calculate all kinds of watermarks
+                           * and thresholds.
+                        */
+
+
+
+                        /*
+                                when idx = j = 0 following while loop never get executed
+                        */
+
+
+                        /*
+
+                                when idx = j = 1
+                                sysctl_lowmem_reserve_ratio[0] = 256
+                                
+                                lower_zone = ZONE_DMA
+                                zone tracked by j = ZONE_DMA32
+                                ZONE_DMA.lowmem_reserve[1] = DMA32 476486 / 256 =  1861        
+
+                                 managed_pages = 476486 + 3972 = 480458
+
+                        */
+
+                        /*
+                                when idx = j = 2 
+                                 sysctl_lowmem_reserve_ratio[1] = 256
+                                 lower_zone = ZONE_DMA32
+                                 zone tracked by j ZONE_NORMAL0
+                                 
+                                 ZONE_DMA32.lowmem_reserve[2] = 7728372/256 = 30188
+
+
+                                managed_pages = 7728372 + 476486 = 8204858
+
+
+                                idx-- 
+                                lower_zone = ZONE_DMA
+                                zone tracked by j ZONE_NORMAL0
+                                ZONE_DMA.lowmem_reserve[2] = 8204858 / 256 =  32050        
+                                
+
+                        */
+
+                        /*
+
+                                when idx = j = 2 
+                                 sysctl_lowmem_reserve_ratio[2] = 32
+                                lower_zone = NORMAL0
+                                
+
+                                both above numbers 30188 and 32050 stays constant after this becaue lower zone becomes NORMAL
+                                
+                        */
+
+                        
+
+
+
+
+
+                        while (idx) {
+                                struct zone *lower_zone;
+
+                                idx--;
+
+                                if (sysctl_lowmem_reserve_ratio[idx] < 1)
+                                        sysctl_lowmem_reserve_ratio[idx] = 1;
+
+                                lower_zone = pgdat->node_zones + idx;
+                                
+                                lower_zone->lowmem_reserve[j] = managed_pages /
+                                        sysctl_lowmem_reserve_ratio[idx];
+
+
+                                // and you up managed pages of above zone by number of managed pages of lower zone
+                                managed_pages += lower_zone->managed_pages;
+                        }
+                }
+
+
+        }
+
+        /* update totalreserve_pages */
+        calculate_totalreserve_pages();
+}
+
+
+
+
+
+static void calculate_totalreserve_pages(void)
+{
+        struct pglist_data *pgdat;
+        unsigned long reserve_pages = 0;
+        enum zone_type i, j;
+
+        for_each_online_pgdat(pgdat) {
+
+                pgdat->totalreserve_pages = 0;
+
+                for (i = 0; i < MAX_NR_ZONES; i++) {
+                        struct zone *zone = pgdat->node_zones + i;
+                        long max = 0;
+
+                        /* Find valid and maximum lowmem_reserve in the zone */
+                        for (j = i; j < MAX_NR_ZONES; j++) {
+                                if (zone->lowmem_reserve[j] > max)
+                                        max = zone->lowmem_reserve[j];
+                        }
+
+                        /* we treat the high watermark as reserved pages. */
+                        max += high_wmark_pages(zone);
+
+                        if (max > zone->managed_pages)
+                                max = zone->managed_pages;
+
+                        pgdat->totalreserve_pages += max;
+
+                        reserve_pages += max;
+                }
+        }
+        totalreserve_pages = reserve_pages;
+}
+
