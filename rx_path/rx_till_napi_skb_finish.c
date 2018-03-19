@@ -5,6 +5,34 @@
  *  struct net_device 
  **/
 
+/**
+ *
+ * ixgbe_open
+ * -> ixgbe_request_irq
+ *  -> ixgbe_request_msix_irqs setups irq interrupt 
+ *                                  |
+ *                                  |
+ *        ---------------------------------------------------------------
+ *        |                                                               |
+ *     ixgbe_msix_clean_rings                                          ixgbe_msix_other (i dont know where this path traverse)
+ *   -> napi_schedule_irqoff 
+ *    -> __napi_schedule_irqoff 
+ *     -> ____napi_schedule
+ *      -> __raise_softirq_irqoff 
+ *       -> net_rx_action
+ *        -> napi_poll
+ *         -> ixgbe_poll 
+ *          -> ixgbe_clean_rx_irq
+ *           -> ixgbe_rx_skb
+ *            -> napi_gro_receive
+ *             -> napi_skb_finish(dev_gro_receive)
+ *              -> netif_receive_skb_internal
+ *
+ * XXX 
+ *
+ *
+ *
+ **/
 
 
 
@@ -711,27 +739,6 @@ struct napi_struct {
 
 
 
-/**
- * ixgbe_request_msix_irqs setups irq interrupt 
- *  ixgbe_msix_clean_rings  / ixgbe_msix_other (i dont know where this path traverse)
- *  -> napi_schedule_irqoff 
- *   -> __napi_schedule_irqoff 
- *    -> ____napi_schedule
- *     -> __raise_softirq_irqoff 
- *      -> net_rx_action
- *       -> napi_poll
- *        -> ixgbe_poll 
- *         -> ixgbe_clean_rx_irq
- *          -> ixgbe_rx_skb
- *           -> napi_gro_receive
- *            -> napi_skb_finish(dev_gro_receive)
- *             -> netif_receive_skb_internal
- *
- * XXX 
- *
- *
- *
- **/
 
 static __latent_entropy void net_rx_action(struct softirq_action *h)
 {
