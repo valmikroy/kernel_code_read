@@ -380,6 +380,14 @@ err_alloc_q_vectors:
 
 /* MAX_Q_VECTORS of these are allocated,
  * but we only use one per queue-specific vector.
+ *
+ * XXX q_vector represents each queue on NIC
+ * It holds
+ * - napi structure 
+ * - ring containers  
+ * - rcu LL
+ * - CPU mask  
+ * - NUMA  
  */
 struct ixgbe_q_vector {
         struct ixgbe_adapter *adapter;
@@ -439,6 +447,41 @@ struct ixgbe_q_vector {
  *
  *
  **/
+
+
+
+/**
+ * ixgbe_request_msix_irqs - Initialize MSI-X interrupts
+ * @adapter: board private structure
+ *
+ * ixgbe_request_msix_irqs allocates MSI-X vectors and requests
+ * interrupts from the kernel.
+ **/
+static int ixgbe_request_msix_irqs(struct ixgbe_adapter *adapter)
+{
+
+        struct net_device *netdev = adapter->netdev;
+        unsigned int ri = 0, ti = 0;
+        int vector, err;
+
+        for (vector = 0; vector < adapter->num_q_vectors; vector++) {
+                struct ixgbe_q_vector *q_vector = adapter->q_vector[vector];
+
+        /* .............. */
+
+                err = request_irq(entry->vector, &ixgbe_msix_clean_rings, 0,
+                  q_vector->name, q_vector);
+
+        }
+
+        err = request_irq(adapter->msix_entries[vector].vector,
+               ixgbe_msix_other, 0, netdev->name, adapter);
+
+        /* .............. */
+
+
+}
+
 
 
 
@@ -524,9 +567,15 @@ static int __init net_dev_init(void)
  *       XXX Packet arrives
  *       ixgbe_msix_other gets executed 
  *
+ *       ixgbe_service_event_schedule
+ *       -> &adapter->service_task  setup with INIT_WORK(&adapter->service_task, ixgbe_service_task);
+ *         -> ixgbe_service_task
+ *           
+ *    
+ *
  *       looks like ixgbe_service_event_schedule transfers data to rings
  *
- *       this also triggers napi_schedule to start i softirq context 
+ *       this also triggers napi_schedule to start in softirq context 
  *       if its not already started
  *       CPU on which this h/w interrupt get executed also executes softirq 
  *       for it to improve CPU cache hit rate.
@@ -534,6 +583,13 @@ static int __init net_dev_init(void)
  *
  *       this function also keeps track of rate of interrupts its arriving so 
  *       'interrupt throttling' and 'Interrupt Coalescing' can be achived
+ *
+ *
+ * XXX Interrupt coalescing and Interrupt throttling available 
+ * 
+ * adaptive-rx can be turned on for two factor based throttling 
+ * - either with delay before rasing interrupt after packet arrives
+ * - wait for maximum number of frames to be arrive  before raising interrupt
  *
  **/
 
@@ -644,11 +700,6 @@ struct napi_struct {
  *
  *
  *
- * XXX Interrupt coalescing and Interrupt throttling available 
- * 
- * adaptive-rx can be turned on for two factor based throttling 
- * - either with delay before rasing interrupt after packet arrives
- * - wait for maximum number of frames to be arrive  before raising interrupt
  *
  *
  *  
@@ -661,8 +712,22 @@ struct napi_struct {
 
 
 /**
+ * ixgbe_request_msix_irqs setups irq interrupt 
+ *  ixgbe_msix_clean_rings  / ixgbe_msix_other (i dont know where this path traverse)
+ *  -> napi_schedule_irqoff 
+ *   -> __napi_schedule_irqoff 
+ *    -> ____napi_schedule
+ *     -> __raise_softirq_irqoff 
+ *      -> net_rx_action
+ *       -> napi_poll
+ *        -> ixgbe_poll 
+ *         -> ixgbe_clean_rx_irq
+ *          -> ixgbe_rx_skb
+ *           -> napi_gro_receive
+ *            -> napi_skb_finish(dev_gro_receive)
+ *             -> netif_receive_skb_internal
  *
- * XXX __raise_softirq_irqoff from ____napi_schedule calls net_rx_action
+ * XXX 
  *
  *
  *
@@ -992,6 +1057,8 @@ static int ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
 
 
                 /*XXX 
+                 *
+                 *
                  * this calls napi_gro_receive()
                  * and  napi_gro_receive has function entry tracepoint
                  *
