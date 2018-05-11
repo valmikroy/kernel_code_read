@@ -36,6 +36,47 @@
 
 
 
+/*
+ * Incoming packets are placed on per-CPU queues
+ */
+struct softnet_data {
+        struct list_head        poll_list;
+        struct sk_buff_head     process_queue;
+
+        /* stats */
+        unsigned int            processed;
+        unsigned int            time_squeeze;
+        unsigned int            received_rps;
+#ifdef CONFIG_RPS
+        struct softnet_data     *rps_ipi_list;
+#endif
+#ifdef CONFIG_NET_FLOW_LIMIT
+        struct sd_flow_limit __rcu *flow_limit;
+#endif
+        struct Qdisc            *output_queue;
+        struct Qdisc            **output_queue_tailp;
+        struct sk_buff          *completion_queue;
+
+#ifdef CONFIG_RPS
+        /* input_queue_head should be written by cpu owning this struct,
+         * and only read by other cpus. Worth using a cache line.
+         */
+        unsigned int            input_queue_head ____cacheline_aligned_in_smp;
+
+        /* Elements below can be accessed between CPUs for RPS/RFS */
+        struct call_single_data csd ____cacheline_aligned_in_smp;
+        struct softnet_data     *rps_ipi_next;
+        unsigned int            cpu;
+        unsigned int            input_queue_tail;
+#endif
+        unsigned int            dropped;
+        struct sk_buff_head     input_pkt_queue;
+        struct napi_struct      backlog;
+
+};
+
+
+
 
 
 static const struct net_device_ops ixgbe_netdev_ops = {
