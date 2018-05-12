@@ -943,6 +943,45 @@ err_alloc_q_vectors:
 
 
 
+**
+ * ixgbe_alloc_q_vector - Allocate memory for a single interrupt vector
+ * @adapter: board private structure to initialize
+ * @v_count: q_vectors allocated on adapter, used for ring interleaving
+ * @v_idx: index of vector in adapter struct
+ * @txr_count: total number of Tx rings to allocate
+ * @txr_idx: index of first Tx ring to allocate
+ * @xdp_count: total number of XDP rings to allocate
+ * @xdp_idx: index of first XDP ring to allocate
+ * @rxr_count: total number of Rx rings to allocate
+ * @rxr_idx: index of first Rx ring to allocate
+ *
+ * We allocate one q_vector.  If allocation fails we return -ENOMEM.
+ **/
+static int ixgbe_alloc_q_vector(struct ixgbe_adapter *adapter,
+                                int v_count, int v_idx,
+                                int txr_count, int txr_idx,
+                                int xdp_count, int xdp_idx,
+                                int rxr_count, int rxr_idx)
+{
+        struct ixgbe_q_vector *q_vector;
+        struct ixgbe_ring *ring;
+        int node = NUMA_NO_NODE;
+        int cpu = -1;
+        int ring_count, size;
+	 
+
+	         /* .............. */
+
+	netif_napi_add(adapter->netdev, &q_vector->napi,
+                       ixgbe_poll, 64);
+
+	         /* .............. */
+
+	 
+ }
+
+
+
 
 /* MAX_Q_VECTORS of these are allocated,
  * but we only use one per queue-specific vector.
