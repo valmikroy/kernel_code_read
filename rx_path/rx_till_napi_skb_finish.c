@@ -943,7 +943,7 @@ err_alloc_q_vectors:
 
 
 
-**
+/**
  * ixgbe_alloc_q_vector - Allocate memory for a single interrupt vector
  * @adapter: board private structure to initialize
  * @v_count: q_vectors allocated on adapter, used for ring interleaving
