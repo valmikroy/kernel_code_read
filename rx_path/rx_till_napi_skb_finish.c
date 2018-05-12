@@ -783,7 +783,8 @@ static int ixgbe_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
          * for ex: when network device start/stop with help of ifconfig 
          * which fuctions to execute are pointed by ndo_stop and ndo_start kind of keys
          **/
-        netdev->netdev_ops = &ixgbe_netdev_ops;
+        netdev->netdev_ops = &ixgbe_netdev_ops;	
+	ixgbe_set_ethtool_ops(netdev); // setup ethtool hooks to modify NIC features
 
 
         
