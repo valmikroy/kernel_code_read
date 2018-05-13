@@ -1115,59 +1115,24 @@ int ixgbe_open(struct net_device *netdev)
 
         /* allocate transmit descriptors */
         err = ixgbe_setup_all_tx_resources(adapter);
-        if (err)
-                goto err_setup_tx;
+       
+	/* .............. */
 
         /* allocate receive descriptors */
         err = ixgbe_setup_all_rx_resources(adapter);
-        if (err)
-                goto err_setup_rx;
 
-        ixgbe_configure(adapter);
+	/* .............. */
+
+	ixgbe_configure(adapter);
 
         err = ixgbe_request_irq(adapter);
-        if (err)
-                goto err_req_irq;
+	     
+	
+	/* .............. */
 
-        /* Notify the stack of the actual queue counts. */
-        if (adapter->num_rx_pools > 1)
-                queues = adapter->num_rx_queues_per_pool;
-        else
-                queues = adapter->num_tx_queues;
-
-        err = netif_set_real_num_tx_queues(netdev, queues);
-        if (err)
-                goto err_set_queues;
-
-        if (adapter->num_rx_pools > 1 &&
-            adapter->num_rx_queues > IXGBE_MAX_L2A_QUEUES)
-                queues = IXGBE_MAX_L2A_QUEUES;
-        else
-                queues = adapter->num_rx_queues;
-        err = netif_set_real_num_rx_queues(netdev, queues);
-        if (err)
-                goto err_set_queues;
-
-        ixgbe_ptp_init(adapter);
-
-        ixgbe_up_complete(adapter);
-
-        ixgbe_clear_udp_tunnel_port(adapter, IXGBE_VXLANCTRL_ALL_UDPPORT_MASK);
-        udp_tunnel_get_rx_info(netdev);
-
-        return 0;
-
-err_set_queues:
-        ixgbe_free_irq(adapter);
-err_req_irq:
-        ixgbe_free_all_rx_resources(adapter);
-        if (hw->phy.ops.set_phy_power && !adapter->wol)
-                hw->phy.ops.set_phy_power(&adapter->hw, false);
-err_setup_rx:
-        ixgbe_free_all_tx_resources(adapter);
-err_setup_tx:
-        ixgbe_reset(adapter);
-
+        
+        
+        
         return err;
 }
 
