@@ -1130,7 +1130,10 @@ int ixgbe_open(struct net_device *netdev)
 	
 	/* .............. */
 
-        
+        ixgbe_up_complete(adapter);        
+	
+	/* .............. */
+
         
         
         return err;
