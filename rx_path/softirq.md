@@ -48,3 +48,4 @@ open_softirq(NET_TX_SOFTIRQ, net_tx_action);
 open_softirq(NET_RX_SOFTIRQ, net_rx_action);
 
 ```
+- accounting of softirq is publish by `account_irq_exit_time(current)` under `/proc/softirqs`
