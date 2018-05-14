@@ -72,3 +72,15 @@ static struct smp_hotplug_thread softirq_threads = {
    - figures if any softirq pending with `local_softirq_pending` 
    - and use the count to loop through each pending list of softirq task which is defined as `static struct softirq_action softirq_vec[NR_SOFTIRQS] __cacheline_aligned_in_smp`
    - and every element of array is `struct softirq_action` which has `*action` pointer which get called as execution of softirq task
+   - `open_softirq` is place where above `*action` pointer get registered, for example
+```c
+
+# net/core/dev.c
+
+open_softirq(NET_TX_SOFTIRQ, net_tx_action);
+
+/* ..... */
+
+open_softirq(NET_RX_SOFTIRQ, net_rx_action);
+
+```
