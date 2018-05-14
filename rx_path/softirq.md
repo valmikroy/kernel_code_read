@@ -56,7 +56,7 @@ struct cpuinfo_ia64 {
 };
 ```
 
-- `ksoftirqd_should_run` to detect pending softirqs and `run_ksoftirqd` to run upon pending softirq detected. Both functions defined in `kernel/smpboot.c`
+- `ksoftirqd_should_run` to detect pending softirqs and `run_ksoftirqd` to run upon pending softirq detected.  `run_ksoftirqd` eventually end up calling `__do_softirq`
 
 ```c
 static struct smp_hotplug_thread softirq_threads = {
@@ -68,4 +68,7 @@ static struct smp_hotplug_thread softirq_threads = {
         .thread_comm            = "ksoftirqd/%u",
 };
 ```
-- 
+- `__do_softirq` 
+   - figures if any softirq pending with `local_softirq_pending` 
+   - and use the count to loop through each pending list of softirq task which is defined as `static struct softirq_action softirq_vec[NR_SOFTIRQS] __cacheline_aligned_in_smp`
+   - and every element of array is `struct softirq_action` which has `*action` pointer which get called as execution of softirq task
