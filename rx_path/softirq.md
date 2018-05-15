@@ -79,14 +79,18 @@ static int __init net_dev_init(void)
                 INIT_WORK(flush, flush_backlog); /* provision to flush net device in case of turning it down */
 
                 /*
-                 struct sk_buff_head     input_pkt_queue;
-                 input_pkt_queue keeps track of unprocessed packets 
-                 input_pkt_queue has upper limit defined by net.core.netdev_max_backlog 
+                 - struct sk_buff_head     input_pkt_queue;
+                 - input_pkt_queue keeps track of unprocessed packets which came from NIC
+                 - input_pkt_queue has upper limit defined by net.core.netdev_max_backlog 
                 */
                 skb_queue_head_init(&sd->input_pkt_queue); 
                 
-                
-                skb_queue_head_init(&sd->process_queue);   // struct sk_buff_head     process_queue; 
+                /*
+                 - struct sk_buff_head     process_queue; 
+                 - this defines backlog of packets
+                 - eventually they will be pushed to IP layer space with process_backlog() -> deliver_skb()
+                */
+                skb_queue_head_init(&sd->process_queue);   // 
                 INIT_LIST_HEAD(&sd->poll_list);
                 sd->output_queue_tailp = &sd->output_queue;
 #ifdef CONFIG_RPS
