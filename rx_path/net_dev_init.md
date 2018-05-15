@@ -1,5 +1,7 @@
-- One more pass at `net_dev_init` and related `softnet_data` elements
- 
+### `net_dev_init` and related `softnet_data` elements
+This get called during boot time `net_dev_init`  
+
+
 
 ```c
 static int __init net_dev_init(void)
@@ -59,8 +61,13 @@ static int __init net_dev_init(void)
    - `struct sk_buff_head     process_queue;`
    - this defines backlog of packets
    - eventually they will be pushed to IP layer space through `process_backlog()` -> `deliver_skb()`
+   - looks at `sd->backlog.poll = process_backlog;` which used to process `sd->process_queue`
+       
    
 - `INIT_LIST_HEAD(&sd->poll_list);`
    - `struct list_head        poll_list;`
    - `poll_list` present in both `softnet_data` and `napi_struct` 
    - during `napi_poll` execution `napi_struct`'s `poll_list` get appended to `softnet_data`'s  
+
+- `sd->backlog.weight = weight_p;`
+napi poll device weight gets assigned here 
