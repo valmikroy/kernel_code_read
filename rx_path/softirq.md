@@ -4,6 +4,7 @@
 
 
 ```c
+// arch/ia64/include/asm/processor.h
 /*
  * CPU type, hardware bug flags, and per-CPU state.  Frequently used
  * state comes earlier:
@@ -12,7 +13,6 @@ struct cpuinfo_ia64 {
         unsigned int softirq_pending;
         /* ..... */
         
-        #XXX
         struct task_struct *ksoftirqd;  /* kernel softirq daemon for this CPU */
 
         /* ..... */
@@ -23,6 +23,8 @@ struct cpuinfo_ia64 {
 - `ksoftirqd_should_run` to detect pending softirqs and `run_ksoftirqd` to run upon pending softirq detected.  `run_ksoftirqd` eventually end up calling `__do_softirq`
 
 ```c
+// kernel/softirq.c
+
 static struct smp_hotplug_thread softirq_threads = {
         .store                  = &ksoftirqd,           // XXX somehow this leaks out of above `struct cpuinfo_ia64`
       
@@ -38,8 +40,7 @@ static struct smp_hotplug_thread softirq_threads = {
    - and every element of array is `struct softirq_action` which has `*action` pointer which get called as execution of softirq task
    - `open_softirq` is place where above `*action` pointer get registered, for example
 ```c
-
-# net/core/dev.c
+// net/core/dev.c
 
 static int __init net_dev_init(void)
 {
