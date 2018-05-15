@@ -71,3 +71,7 @@ static int __init net_dev_init(void)
 
 - `sd->backlog.weight = weight_p;`
 napi poll device weight gets assigned here 
+
+- `sd->csd.func = rps_trigger_softirq;`
+   - this function used by `net_rps_send_ipi` to act upon `*rps_ipi_next` `softnet_data` pointer inside given `sd`. This is how RPS has been implemented where each `sd` keeps track of packet's own hash calculated CPU and send RPI with `rps_ipi_next`  
+
