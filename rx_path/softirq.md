@@ -64,24 +64,27 @@ static int __init net_dev_init(void)
         /* ..... */
 
         for_each_possible_cpu(i) {
-                // XXX 
-                // work_struct is part of workqueue interface,  
-                // it defines actions to execute in softirq interface
+                /*
+                 work_struct is part of workqueue interface,  
+                 it defines actions to execute in softirq interface
+                */
                 struct work_struct *flush = per_cpu_ptr(&flush_works, i);
                 
-                // XXX
-                // softnet_data gets defined for each cpu
+                /*
+                 softnet_data gets defined for each cpu
+                */
                 struct softnet_data *sd = &per_cpu(softnet_data, i);
 
                 
-                INIT_WORK(flush, flush_backlog); // XXX provision to flush net device in case of turning it down
+                INIT_WORK(flush, flush_backlog); /* provision to flush net device in case of turning it down */
 
-                // XXX
-                // struct sk_buff_head     input_pkt_queue;
-                // input_pkt_queue keeps track of unprocessed packets 
-                // input_pkt_queue has upper limit defined by net.core.netdev_max_backlog 
-                //
+                /*
+                 struct sk_buff_head     input_pkt_queue;
+                 input_pkt_queue keeps track of unprocessed packets 
+                 input_pkt_queue has upper limit defined by net.core.netdev_max_backlog 
+                */
                 skb_queue_head_init(&sd->input_pkt_queue); 
+                
                 
                 skb_queue_head_init(&sd->process_queue);   // struct sk_buff_head     process_queue; 
                 INIT_LIST_HEAD(&sd->poll_list);
