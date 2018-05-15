@@ -1,5 +1,5 @@
 ### `net_dev_init` and related `softnet_data` elements
-This get called during boot time `net_dev_init`  
+`subsys_initcall(net_dev_init);` at the end of `net/core/dev.c` suggests that `net_dev_init` get called at boot time.
 
 
 
