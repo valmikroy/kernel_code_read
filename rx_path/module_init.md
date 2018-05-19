@@ -150,6 +150,28 @@ eventually above call chain reaches to ` netif_napi_add(adapter->netdev, &q_vect
    - `ixgbe_poll` function gets called for every `napi_schedule` call from softirq context
    - `64` is device driver weight , more on this during runtime description.
    
+- `q_vector` is instance of `struct ixgbe_q_vector` which is attached to every ring
+```c
+struct ixgbe_q_vector {
+        struct ixgbe_adapter *adapter;
+#ifdef CONFIG_IXGBE_DCA
+        int cpu;            /* CPU for DCA */
+#endif
+        u16 v_idx;              /* index of q_vector within array, also used for
+                                 * finding the bit in EICR and friends that
+                                 * represents the vector for this ring */
+        u16 itr;                /* Interrupt throttle rate written to EITR */
+        struct ixgbe_ring_container rx, tx;
 
+        struct napi_struct napi;
+        cpumask_t affinity_mask;
+        int numa_node;
+        struct rcu_head rcu;    /* to avoid race with update stats on free */
+        char name[IFNAMSIZ + 9];
+
+        /* for dynamic allocation of rings associated with this q_vector */
+        struct ixgbe_ring ring[0] ____cacheline_internodealigned_in_smp;
+};
+```
 
 
