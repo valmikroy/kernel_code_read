@@ -2,10 +2,11 @@ Handling of hardware interrupt in terms of `ixgbe` device driver. You can easily
 
 - Hardware interrupt handler `ixgbe_msix_clean_rings` gets registerd as callback through `request_irq` which called through following callchain
 ```
-ixgbe_open - triggered by ifconfig up 
+ixgbe_open                        /* triggered by ifconfig up */ 
  ixgbe_request_irq  
   ixgbe_request_msix_irqs
-   request_irq - registers  ixgbe_msix_clean_rings for interrupt handling
+   request_irq                    /* registers  ixgbe_msix_clean_rings() for interrupt handling */
+     ixgbe_up_complete            /* this reaches to napi_enabled() */
 
 ```
 
