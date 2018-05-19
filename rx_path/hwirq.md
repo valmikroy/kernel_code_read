@@ -1,7 +1,7 @@
 Handling of hardware interrupt in terms of `ixgbe` device driver. You can easily figure out function which handlers irq by tracing `IRQ_HANDLED`
 
 - Hardware interrupt handler `ixgbe_msix_clean_rings` gets registerd as callback through `request_irq` which called through following callchain
-```
+```c
 ixgbe_open                        /* triggered by ifconfig up */ 
  ixgbe_request_irq  
   ixgbe_request_msix_irqs
