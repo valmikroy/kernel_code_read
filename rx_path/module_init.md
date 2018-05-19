@@ -76,6 +76,7 @@ static int ixgbe_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
          /* ..... */
 
         netdev->netdev_ops = &ixgbe_netdev_ops;
+        ixgbe_set_ethtool_ops(netdev);
 
          /* ..... */
 
@@ -134,6 +135,7 @@ static const struct ethtool_ops ixgbe_ethtool_ops = {
         .get_pauseparam         = ixgbe_get_pauseparam,
         /* ..... */
 ```
+
 
 
 
