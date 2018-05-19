@@ -85,7 +85,7 @@ static int ixgbe_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
         
 ```        
 
-    -  identifies device by looking up `ixgbe_pci_tbl` to determine approriate hw related parameters like link and mac related operations.
+   -  identifies device by looking up `ixgbe_pci_tbl` to determine approriate hw related parameters like link and mac related operations.
    - enables device
    - enable DMA masks
    - allocates PCI memory mapped region through `IOMMU`
