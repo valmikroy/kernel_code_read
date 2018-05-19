@@ -139,9 +139,9 @@ static const struct ethtool_ops ixgbe_ethtool_ops = {
 
 - NIC deliveres data in form of queues where hash functions used to divide traffic into set of buckets based on meta data information of packet (like src/dst ip/port), there is memory space in form of ring buffer attached to the queue which gets created during initialization of NIC with chain of calls triggered by `ixgbe_init_interrupt_scheme(adapter)` where `adapter` is `struct ixgbe_adapter *`.
 ```c
-ixgbe_init_interrupt_scheme(adapter) /* RSS queues count decided by ixgbe_sw_init(adapter, ii) */
-  ixgbe_alloc_q_vectors(adapter) /* setups RSS queues */
-    ixgbe_alloc_q_vector  /* get called in loop for each queue */
+ixgbe_init_interrupt_scheme(adapter)               /* RSS queues count decided by ixgbe_sw_init(adapter, ii) */
+  ixgbe_alloc_q_vectors(adapter)                   /* setups RSS queues */
+    ixgbe_alloc_q_vector                           /* get called in loop for each queue */
               netif_napi_add(adapter->netdev, &q_vector->napi,ixgbe_poll, 64)
                                
 ```
