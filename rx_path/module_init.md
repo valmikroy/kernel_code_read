@@ -79,6 +79,7 @@ static int ixgbe_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
         ixgbe_set_ethtool_ops(netdev);
 
          /* ..... */
+        ixgbe_sw_init(adapter, ii)
 
 }        
         
@@ -136,6 +137,19 @@ static const struct ethtool_ops ixgbe_ethtool_ops = {
         /* ..... */
 ```
 
+- NIC deliveres data in form of queues where hash functions used to divide traffic into set of buckets based on meta data information of packet (like src/dst ip/port), there is memory space in form of ring buffer attached to the queue which gets created during initialization of NIC with chain of calls triggered by `ixgbe_init_interrupt_scheme(adapter)` where `adapter` is `struct ixgbe_adapter *`.
+```c
+ixgbe_init_interrupt_scheme(adapter) /* RSS queues count decided by ixgbe_sw_init(adapter, ii) */
+  ixgbe_alloc_q_vectors(adapter) /* setups RSS queues */
+    ixgbe_alloc_q_vector  /* get called in loop for each queue */
+              netif_napi_add(adapter->netdev, &q_vector->napi,ixgbe_poll, 64)
+                               
+```
+eventually above call chain reaches to ` netif_napi_add(adapter->netdev, &q_vector->napi,ixgbe_poll, 64)`  where 
+   - `q_vector->napi` is instance of `struct napi_sctruct` attached to each queue
+   - `ixgbe_poll` function gets called for every `napi_schedule` call from softirq context
+   - `64` is device driver weight
+   
 
 
 
