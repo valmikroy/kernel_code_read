@@ -148,7 +148,7 @@ ixgbe_init_interrupt_scheme(adapter) /* RSS queues count decided by ixgbe_sw_ini
 eventually above call chain reaches to ` netif_napi_add(adapter->netdev, &q_vector->napi,ixgbe_poll, 64)`  where 
    - `q_vector->napi` is instance of `struct napi_sctruct` attached to each queue
    - `ixgbe_poll` function gets called for every `napi_schedule` call from softirq context
-   - `64` is device driver weight
+   - `64` is device driver weight , more on this during runtime description.
    
 
 
