@@ -2,15 +2,15 @@
 ```c
 static int __init ixgbe_init_module(void)
 {
-/* ..... */
+        /* ..... */
 
         ixgbe_wq = create_singlethread_workqueue(ixgbe_driver_name);
 
-/* ..... */
+        /* ..... */
 
         ret = pci_register_driver(&ixgbe_driver);
 
-/* ..... */
+        /* ..... */
 
         return 0;
 }
@@ -27,7 +27,7 @@ static struct pci_driver ixgbe_driver = {
         .id_table = ixgbe_pci_tbl,
         .probe    = ixgbe_probe,
         .remove   = ixgbe_remove,
-/* ..... */
+        /* ..... */
 
 };
 ```
