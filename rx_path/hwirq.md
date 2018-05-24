@@ -59,5 +59,6 @@ static inline void ____napi_schedule(struct softnet_data *sd,
         __raise_softirq_irqoff(NET_RX_SOFTIRQ);
 }
 ```
-
+- `__raise_softirq_irqoff`
+This function will turn off hardware irq and triggers softirq `NET_RX_SOFTIRQ` pointing to function `net_rx_action` executed in softirq context.
 
