@@ -80,6 +80,11 @@ static int ixgbe_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
          /* ..... */
         ixgbe_sw_init(adapter, ii)
+        
+        /* ..... */
+        err = ixgbe_init_interrupt_scheme(adapter);
+
+       /* ..... */
 
 }        
         
