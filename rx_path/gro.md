@@ -3,7 +3,10 @@ During softirq context `ixgbe_clean_rx_irq` gets executed as part of procesing p
 GRO get trigged by `napi_gro_receive(napi_struct , skb)` via `ixgbe_rx_skb` and reaches to `dev_gro_receive` which formulates feedback from protocal layer analyzing each flag on packet.
 
 ```c
-// loop from dev_gro_receive()
+/* 
+   loop from dev_gro_receive() which get called from napi_gro_receive() at net/core/dev.c
+   return napi_skb_finish(dev_gro_receive(napi, skb), skb)
+*/
 
      rcu_read_lock();
         list_for_each_entry_rcu(ptype, head, list) {
@@ -54,6 +57,12 @@ Above
                 nskb->next = NULL;
                 napi_gro_complete(nskb);
                 napi->gro_count--;
+                }
 
 ```
 
+One thing , prior to flush of GRO packet it's fragments get tracked in `napi_struct` for that `q_vector` of ring.
+
+
+
+Eventually `netif_receive_skb_internal` reached from either `napi_skb_finish` or `napi_gro_complete`
