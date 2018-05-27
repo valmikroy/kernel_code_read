@@ -3,7 +3,9 @@ During softirq context `ixgbe_clean_rx_irq` gets executed as part of procesing p
 GRO get trigged by `napi_gro_receive(napi_struct , skb)` via `ixgbe_rx_skb` and reaches to `dev_gro_receive` which formulates feedback from protocal layer analyzing each flag on packet.
 
 ```c
-        rcu_read_lock();
+// loop from dev_gro_receive()
+
+     rcu_read_lock();
         list_for_each_entry_rcu(ptype, head, list) {
                 if (ptype->type != type || !ptype->callbacks.gro_receive)
                         continue;
@@ -54,3 +56,4 @@ Above
                 napi->gro_count--;
 
 ```
+
