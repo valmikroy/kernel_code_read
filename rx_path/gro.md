@@ -65,4 +65,7 @@ One thing , prior to flush of GRO packet it's fragments get tracked in `napi_str
 
 
 
-Eventually `netif_receive_skb_internal` reached from either `napi_skb_finish` or `napi_gro_complete`
+Eventually `netif_receive_skb_internal` reached from 
+- `napi_skb_finish` if the packet in not going to merged to an existing GRO'd flow, OR  
+- `napi_gro_complete` if protocol layers indicated that it's time to flush the flow, OR
+- 
