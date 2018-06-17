@@ -258,5 +258,5 @@ drop:
 }
 ```
 - this append packet to CPUs `sd->input_pkt_queue` queue after checking threshold with `netdev_max_backlog` and flow limit with `skb_flow_limit` . 
-- Flow limit could be good tune up to avoid ddos, which looks like throttles rate of packet processing per network flow. Enable this by adding bitmap at `/proc/sys/net/core/flow_limit_cpu_bitmap` and `net.core.flow_limit_table_len` 
+- Flow limit could be good tune up to avoid ddos, which looks like throttles rate of packet processing per network flow. Enable this by adding bitmap at `/proc/sys/net/core/flow_limit_cpu_bitmap` and tuning `net.core.flow_limit_table_len` according to number of flows. 
 
