@@ -46,3 +46,6 @@ above shows that `ip_rcv` is function pointer which called by `pt_prev->func`
                        net, NULL, skb, dev, NULL,
                        ip_rcv_finish);
 ```
+`NF_HOOK` is where netfilter , iptables rules get applied on packet.
+
+
