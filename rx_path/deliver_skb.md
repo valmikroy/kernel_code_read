@@ -38,4 +38,11 @@ static struct packet_type ip_packet_type __read_mostly = {
 };
 
 ```
-above shows that `ip_rcv` is function pointer which called by `t_prev->func`
+above shows that `ip_rcv` is function pointer which called by `pt_prev->func`
+
+- `ip_rcv` will hand off packet to `ip_rcv_finish` via `NF_HOOK` as below
+```c
+        return NF_HOOK(NFPROTO_IPV4, NF_INET_PRE_ROUTING,
+                       net, NULL, skb, dev, NULL,
+                       ip_rcv_finish);
+```
