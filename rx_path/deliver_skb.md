@@ -38,7 +38,7 @@ static struct packet_type ip_packet_type __read_mostly = {
 };
 
 ```
-above shows that `ip_rcv` is function pointer which called by `pt_prev->func`
+above shows that `ip_rcv` is function pointer which called by `pt_prev->func` and defined in `net/ipv4/ip_input.c`
 
 - `ip_rcv` will hand off packet to `ip_rcv_finish` via `NF_HOOK` as below
 ```c
@@ -48,4 +48,4 @@ above shows that `ip_rcv` is function pointer which called by `pt_prev->func`
 ```
 `NF_HOOK` is where netfilter , iptables rules get applied on packet.
 
-
+- `ip_rcv_finish` goes through optimization to determine routing table entry aka `dst_entry` for given packet which `early_demux` which shown some drop in througput and hasve provision to disable it with `net.ipv4.ip_early_demux`.
