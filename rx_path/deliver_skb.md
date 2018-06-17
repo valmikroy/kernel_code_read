@@ -49,3 +49,37 @@ above shows that `ip_rcv` is function pointer which called by `pt_prev->func` an
 `NF_HOOK` is where netfilter , iptables rules get applied on packet.
 
 - `ip_rcv_finish` goes through optimization to determine routing table entry aka `dst_entry` for given packet which `early_demux` which shown some drop in througput and hasve provision to disable it with `net.ipv4.ip_early_demux`.
+
+- somehow `ip_rcv_finish` manage to deliver call to `ip_local_deliver` which pass this packet after resembling to `ip_local_deliver_finish` via `NFHOOK`
+```c
+int ip_local_deliver(struct sk_buff *skb)
+{
+        /*
+         *      Reassemble IP fragments.
+         */
+        struct net *net = dev_net(skb->dev);
+
+        if (ip_is_fragment(ip_hdr(skb))) {
+                if (ip_defrag(net, skb, IP_DEFRAG_LOCAL_DELIVER))
+                        return 0;
+        }
+
+        return NF_HOOK(NFPROTO_IPV4, NF_INET_LOCAL_IN,
+                       net, NULL, skb, skb->dev, NULL,
+                       ip_local_deliver_finish);
+}
+```
+- `ip_local_deliver_finish` will update metrics under `/proc/net/snmp` along with `/proc/net/netstat` with `IpExt` prefix.
+```
+IpExt:  InNoRoutes  InTruncatedPkts  InMcastPkts  OutMcastPkts  InBcastPkts  OutBcastPkts  InOctets   OutOctets  InMcastOctets  OutMcastOctets  InBcastOctets  OutBcastOctets  InCsumErrors  InNoECTPkts  InECT1Pkts  InECT0Pkts  InCEPkts
+IpExt:  0           0                0            0             0            0             904786187  149846886  0              0               0              0               0             802979       0           21726       0
+```
+
+   - `InReceives` - total packets reached `ip_rcv` before any intigrity checks
+   - `InHdrErrors` - currupted headers
+   - `InAddrErrors` - address unreachable, `dst_entry` not found 
+   - `ForwDatagrams` - forwarded packets
+   - `InUnknownProtos` - packet which does not have valid function pointer at `pt_prev->func`
+   - `InDiscards` - discaded due to mem allocation or cheksum failure when packets are trimmed
+   - `InDelivers` - passed packet to protcol layer
+   - `InCsumErrors` - packets with checksum errors
