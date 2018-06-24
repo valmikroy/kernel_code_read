@@ -1,3 +1,5 @@
+
+#### deliver_skb
 Call for `deliver_skb` comes from `__netif_receive_skb_core` in form of two loops 
 - on for taps , this is for packet capturing library, looks like below
 ```c
@@ -30,9 +32,10 @@ static inline int deliver_skb(struct sk_buff *skb,
         return pt_prev->func(skb, skb->dev, pt_prev, orig_dev);
 }
 ```
-
 If you look at last line, `packet_type` has pointer to function which does protocol specific steps.
 
+
+#### IP layer functions
 - Those protocal related function get added with help of `dev_add_pack` , for example IP protocal related function defined in `net/ipv4/af_inet.c`. Added by
 
 ```c
