@@ -99,6 +99,7 @@ IpExt:  0           0                0            0             0            0  
 #### higher level protocol handlers like tcp , udp, icmp
    
 `net_protocol` structure getting populated in `net/ipv4/af_inet.c`   
+
 ```c
    static struct net_protocol tcp_protocol = {
         .early_demux    =       tcp_v4_early_demux,
@@ -124,9 +125,11 @@ static const struct net_protocol icmp_protocol = {
         .err_handler =  icmp_err,
         .no_policy =    1,
         .netns_ok =     1,
-};```
+};
+```
 
 Which get hooked as follows
+
 ```c
 static int __init inet_init(void)
 {
