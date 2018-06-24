@@ -1,11 +1,20 @@
 Call for `deliver_skb` comes from `__netif_receive_skb_core` in form of two loops 
 - on for taps , this is for packet capturing library, looks like below
 ```c
+        // one for taps aka tcpdump
         list_for_each_entry_rcu(ptype, &ptype_all, list) {
                 if (pt_prev)
                         ret = deliver_skb(skb, pt_prev, orig_dev);
                 pt_prev = ptype;
         }
+
+        // deliver packet to next protocol layer
+        list_for_each_entry_rcu(ptype, &skb->dev->ptype_all, list) {
+                if (pt_prev)
+                        ret = deliver_skb(skb, pt_prev, orig_dev);
+                pt_prev = ptype;
+        }
+
 ```
 - packet get pushed to layer above either by `deliver_skb` or direct call to `pt_prev->func`
 
