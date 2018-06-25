@@ -133,3 +133,28 @@ Much like the detailed statistics found in this file for the IP protocol, you wi
 - RcvbufErrors: Incremented when sock_queue_rcv_skb reports that no memory is available; this happens if sk->sk_rmem_alloc is greater than or equal to sk->sk_rcvbuf.
 - SndbufErrors: Incremented if the IP protocol layer reported an error when trying to send the packet and no error queue has been setup. Also incremented if no send queue space or kernel memory are available.
 - InCsumErrors: Incremented when a UDP checksum failure is detected. Note that in all cases I could find, InCsumErrors is incrememnted at the same time as InErrors. Thus, InErrors - InCsumErros should yield the count of memory related errors on the receive side.
+
+
+```
+$ cat /proc/net/udp
+  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode ref pointer drops
+  515: 00000000:B346 00000000:0000 07 00000000:00000000 00:00000000 00000000   104        0 7518 2 0000000000000000 0
+  558: 00000000:0371 00000000:0000 07 00000000:00000000 00:00000000 00000000     0        0 7408 2 0000000000000000 0
+  588: 0100007F:038F 00000000:0000 07 00000000:00000000 00:00000000 00000000     0        0 7511 2 0000000000000000 0
+  769: 00000000:0044 00000000:0000 07 00000000:00000000 00:00000000 00000000     0        0 7673 2 0000000000000000 0
+  812: 00000000:006F 00000000:0000 07 00000000:00000000 00:00000000 00000000     0        0 7407 2 0000000000000000 0
+```
+
+- sl: Kernel hash slot for the socket
+- local_address: Hexadecimal local address of the socket and port number, separated by :.
+- rem_address: Hexadecimal remote address of the socket and port number, separated by :.
+- st: The state of the socket. Oddly enough, the UDP protocol layer seems to use some TCP socket states. In the example above, 7 is TCP_CLOSE.
+- tx_queue: The amount of memory allocated in the kernel for outgoing UDP datagrams.
+- rx_queue: The amount of memory allocated in the kernel for incoming UDP datagrams.
+- tr, tm->when, retrnsmt: These fields are unused by the UDP protocol layer.
+- uid: The effective user id of the user who created this socket.
+- timeout: Unused by the UDP protocol layer.
+- inode: The inode number corresponding to this socket. You can use this to help you determine which user process has this socket open. Check /proc/[pid]/fd, which will contain symlinks to socket[:inode].
+- ref: The current reference count for the socket.
+- pointer: The memory address in the kernel of the struct sock.
+- drops: The number of datagram drops associated with this socket. Note that this does not include any drops related to sending datagrams (on corked UDP sockets or otherwise); this is only incremented in receive paths as of the kernel version examined by this blog post.
