@@ -53,6 +53,8 @@ static struct net_protocol udp_protocol = {
 - check for encasulation if yes, pass packet up in stack
 - UDP lite check 
 - checksum check
+
+
 If all good then pass it on to `__udp_queue_rcv_skb` which looks like
 ```c
 int __udp_enqueue_schedule_skb(struct sock *sk, struct sk_buff *skb)
