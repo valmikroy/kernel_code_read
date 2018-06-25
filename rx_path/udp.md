@@ -47,4 +47,11 @@ static struct net_protocol udp_protocol = {
 
 ```
 
+#### udp_queue_rcv_skb and __udp_queue_rcv_skb
+
+`udp_queue_rcv_skb` will do three things
+- check for encasulation if yes, pass packet up in stack
+- UDP lite check 
+- checksum check
+
 
