@@ -53,5 +53,57 @@ static struct net_protocol udp_protocol = {
 - check for encasulation if yes, pass packet up in stack
 - UDP lite check 
 - checksum check
+If all good then pass it on to `__udp_queue_rcv_skb` which looks like
+```c
+int __udp_enqueue_schedule_skb(struct sock *sk, struct sk_buff *skb)
+{
+        
+        // sk_receive_queue represents socket receive queue where skbs are lined up
+        struct sk_buff_head *list = &sk->sk_receive_queue;
+
+        / **** /
+        
+        // sk_rmem_alloc keep track of amount of memory allocated for socket 
+        // above skbs in sk_receive_queue will get factored in sk_rmem_alloc
+        // sk_rmem_alloc has sk_rcvbuf as upper threshold 
+        
+        rmem = atomic_read(&sk->sk_rmem_alloc);
+        if (rmem > sk->sk_rcvbuf)
+                goto drop;
+        
+        
+        / **** /
+       
+       // start condensing if size is more than half of given threshold
+        if (rmem > (sk->sk_rcvbuf >> 1)) {
+                skb_condense(skb);
+
+                busy = busylock_acquire(sk);
+        }
+        
+        // this finds new skb's size in whole
+        size = skb->truesize;
+
+        / **** /
+ 
+        // verify if above skb can be fit within allowed memory allocation
+        
+        rmem = atomic_add_return(size, &sk->sk_rmem_alloc);
+        if (rmem > (size + sk->sk_rcvbuf))
+                goto uncharge_drop;
+
+        / **** /
+        
+        
+uncharge_drop:
+        atomic_sub(skb->truesize, &sk->sk_rmem_alloc);
+
+drop:
+        atomic_inc(&sk->sk_drops);
+        busylock_release(busy);
+        return err;
+}
+```
+
 
 
