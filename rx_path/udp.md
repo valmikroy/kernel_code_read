@@ -95,8 +95,10 @@ int __udp_enqueue_schedule_skb(struct sock *sk, struct sk_buff *skb)
                 goto uncharge_drop;
 
         / **** /
-        
-        
+                // This adds skb into receive queue of socket
+                __skb_queue_tail(list, skb);
+                
+        / **** /
 uncharge_drop:
         atomic_sub(skb->truesize, &sk->sk_rmem_alloc);
 
