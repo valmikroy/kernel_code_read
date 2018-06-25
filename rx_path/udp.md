@@ -108,6 +108,13 @@ drop:
         return err;
 }
 ```
+This is where softirq context get over.
 
+
+#### __skb_recv_udp and udp_recvmsg
+
+Later `udp_recvmsg` called as part of system call `read()` over UDP socket which will pass on control to  `__skb_recv_udp` which goes through socket received queue and walk through all SKB's to copy data to userspace and free those SKBs.
+
+This is where process context takes place ,
 
 
