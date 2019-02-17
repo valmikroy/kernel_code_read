@@ -225,9 +225,7 @@ Like all such performance optimisations you should only do it after extensive pr
 `udp_sendmsg` introduce corking of packets where packets get buffered until it reaches to the max size of `sk->sk_write_queue` . 
 
 Corking can be setup with two conditions
-
 - using `setsockopt` systemcall to pass `UDP_CORK` as the socket option
-
 - pass `MSG_MORE` as one of the flags when calling `send`, `sendto` or `sendmsg`
 
   
@@ -365,9 +363,7 @@ Next, the source address, device index, and any timestamping options which were 
 
 ```
 ipc.addr = inet->inet_saddr;
-
 ipc.oif = sk->sk_bound_dev_if;
-
 sock_tx_timestamp(sk, &ipc.tx_flags);
 ```
 
@@ -421,6 +417,149 @@ Strict Source Routing allows an originating system to list the specific routers 
     connected = 0;
   }   
 ```
+
+Then TOS IP flags are getting read and checked for following options 
+- `SO_DONTROUTE` via `setsockopt`or `MSG_DONTROUTE` via `sendto` or`sendmsg`
+- `is_strictroute` set  for 'IP Strict Source and Route Route'  aka SSRR
+Both options are checking for options which ask to avoid any kind of network routing.
+
+If `tos` has`0x1` (`RTO_ONLINK`) added to its bit set and socket is considered not 'connected'.
+
+```  
+tos = get_rttos(&ipc, inet);
+  if (sock_flag(sk, SOCK_LOCALROUTE) ||
+      (msg->msg_flags & MSG_DONTROUTE) ||
+      (ipc.opt && ipc.opt->opt.is_strictroute)) {
+    tos |= RTO_ONLINK;
+    connected = 0;
+  }
+```
+
+
+
+Then it will check for multicast and possible contradictory overrides setup by `IP_PKTINFO` 
+```
+  if (ipv4_is_multicast(daddr)) {
+    if (!ipc.oif)
+      ipc.oif = inet->mc_index;
+    if (!saddr)
+      saddr = inet->mc_addr;
+    connected = 0;
+  } else if (!ipc.oif)
+    ipc.oif = inet->uc_index;
+```
+
+After all this checks and conditional unsetting of `connected` flag , it try to choose fast path with help of `sk_dst_check` or slow path where it does manul task of constructing a flow structure.
+```
+// FAST PATH
+  if (connected)
+    rt = (struct rtable *)sk_dst_check(sk, 0);
+
+// SLOW PATH
+  if (!rt) {
+    struct net *net = sock_net(sk);
+    __u8 flow_flags = inet_sk_flowi_flags(sk);
+
+    fl4 = &fl4_stack;
+
+    flowi4_init_output(fl4, ipc.oif, sk->sk_mark, tos,
+           RT_SCOPE_UNIVERSE, sk->sk_protocol,
+           flow_flags,
+           faddr, saddr, dport, inet->inet_sport,
+           sk->sk_uid);
+
+    security_sk_classify_flow(sk, flowi4_to_flowi(fl4)); // SELinux 
+    rt = ip_route_output_flow(net, fl4, sk); // look up routing table for flow structure
+    
+        /* snip */
+  
+}
+```
+Failure to find routing information will result in increments in MIB counters
+```
+    if (IS_ERR(rt)) {
+      err = PTR_ERR(rt);
+      rt = NULL;
+      if (err == -ENETUNREACH)
+        IP_INC_STATS(net, IPSTATS_MIB_OUTNOROUTES);
+      goto out;
+    }
+```
+Check for boardcast packet and proceed with packet send
+```
+    err = -EACCES;
+    if ((rt->rt_flags & RTCF_BROADCAST) &&
+        !sock_flag(sk, SOCK_BROADCAST))
+      goto out;
+```
+Ultimately routing structure gets cached on socket if its declared `connected`
+```
+    if (connected)
+      sk_dst_set(sk, dst_clone(&rt->dst));
+```
+
+Next is handling of `MSG_CONFIRM` flag setup by `send`, `sendto` or `sendmsg` to keep ARP cache warm by going through back and forth `goto` statements
+```
+  if (msg->msg_flags&MSG_CONFIRM)
+    goto do_confirm;
+back_from_confirm:
+
+        /* snip */
+
+do_confirm:
+  if (msg->msg_flags & MSG_PROBE)  // just probe a path with MSG_PROBE
+    dst_confirm_neigh(&rt->dst, &fl4->daddr);
+  if (!(msg->msg_flags&MSG_PROBE) || len)
+    goto back_from_confirm;
+```
+
+First use case for trasmission is, uncorked fast path where you build `skb`  with `ip_make_skb` and call `udp_send_skb`. 
+```
+  /* Lockless fast path for the non-corking case. */
+  if (!corkreq) {
+    skb = ip_make_skb(sk, fl4, getfrag, msg, ulen,
+          sizeof(struct udphdr), &ipc, &rt,
+          msg->msg_flags); 
+    err = PTR_ERR(skb);
+    if (!IS_ERR_OR_NULL(skb))
+      err = udp_send_skb(skb, fl4);
+    goto out;
+  }
+```
+In above code, `ip_make_skb` end up calling `__ip_append_data` which is also called by `ip_append_data` in case of corked socket below 
+
+```
+do_append_data:
+  up->len += ulen;
+  err = ip_append_data(sk, fl4, getfrag, msg, ulen,
+           sizeof(struct udphdr), &ipc, &rt,
+           corkreq ? msg->msg_flags|MSG_MORE : msg->msg_flags);
+  if (err)
+    udp_flush_pending_frames(sk);
+  else if (!corkreq)
+    err = udp_push_pending_frames(sk);
+  else if (unlikely(skb_queue_empty(&sk->sk_write_queue)))
+    up->pending = 0;
+  release_sock(sk);
+
+```
+And  above `udp_push_pending_frames` is just a wrapper around `udp_send_skb`.
+
+In any case, if `skb`formation fails then `err` is set to `-ENOBUFS` and `UDP_MIB_SNDBUFERRORS` is updated. Upon success `UDP_MIB_OUTDATAGRAMS` counter gets updated.  
+
+`__ip_append_data` is at heart of udp transmissions and does following things
+- keep a track of size of  `sk_write_queue` and allocate buffers with `sock_wmalloc` accordingly. It also checks for `NETIF_F_SG` which allows to check if NIC supports scatter/gather IO (Vectored IO), if yes, then fragments of buffers can be addressed for a transfer.
+
+In the end `udp_send_skb` called which after some checksuming rituals transmit packet by calling `ip_send_skb` updating various  `IPSTAT_MIB_` and `UDP_MIB_` stats which are reflected in `/proc/net/snmp`.
+
+Stats under `/proc/net/udp` gets populated by `udp4_format_sock` in `net/ipv4/udp.c`. One of the useful field is `inode` which is mapped under `/proc/[pid]/fd` and helps us to find out which process owns this UDP socket.
+
+
+
+
+
+
+
 
 
 
