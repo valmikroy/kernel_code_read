@@ -221,6 +221,7 @@ Like all such performance optimisations you should only do it after extensive pr
 ```
 
 
+## UDP layer
 
 `udp_sendmsg` introduce corking of packets where packets get buffered until it reaches to the max size of `sk->sk_write_queue` . 
 
@@ -550,9 +551,92 @@ In any case, if `skb`formation fails then `err` is set to `-ENOBUFS` and `UDP_MI
 `__ip_append_data` is at heart of udp transmissions and does following things
 - keep a track of size of  `sk_write_queue` and allocate buffers with `sock_wmalloc` accordingly. It also checks for `NETIF_F_SG` which allows to check if NIC supports scatter/gather IO (Vectored IO), if yes, then fragments of buffers can be addressed for a transfer.
 
-In the end `udp_send_skb` called which after some checksuming rituals transmit packet by calling `ip_send_skb` updating various  `IPSTAT_MIB_` and `UDP_MIB_` stats which are reflected in `/proc/net/snmp`.
+In the end `udp_send_skb` called which after some UDP checksuming rituals transmit packet by calling `ip_send_skb` updating various  `IPSTAT_MIB_` and `UDP_MIB_` stats which are reflected in `/proc/net/snmp`.
 
 Stats under `/proc/net/udp` gets populated by `udp4_format_sock` in `net/ipv4/udp.c`. One of the useful field is `inode` which is mapped under `/proc/[pid]/fd` and helps us to find out which process owns this UDP socket.
+
+## IP layer
+
+Eventually, any call pertaining to send reaches to `ip_send_skb`. This is very short function which calls `ip_local_out`   and if it fails then update ip statistics with `IP_INC_STATS(net, IPSTATS_MIB_OUTDISCARDS)`. 
+
+`ip_local_out` calls `__ip_local_out` which populated length of packet in IP headers (which gets genrated in same function with `struct iphdr *iph = ip_hdr(skb)`)and calculate checksum with `ip_send_check`,  eventually it calls `nf_hook`.
+
+`nf_hook` is wrapper around `nf_hook_thresh` which spot checks if it should proceed further with filters or not and returns true or false as a status upon execution of `dst_output`.  Checkout `nf_hook`
+
+```
+        return nf_hook(NFPROTO_IPV4, NF_INET_LOCAL_OUT, skb, NULL,
+                       skb_dst(skb)->dev, dst_output);
+```
+Any IPTables rules gets executed in CPU context of any send system call so CPU pinning can create inadvertent effect due to CPU pinning. 
+
+Above `dst_output` function looks at `dst` entry in given `skb` and calls attached `output` function as following 
+
+```
+ static inline int dst_output(struct net *net, struct sock *sk, struct sk_buff *skb)
+{
+   return skb_dst(skb)->output(net, sk, skb);
+}
+```
+and most of the time that `output` pointer is calling `ip_output`.
+
+`ip_output` does some MIB statstistical updates and then pass control to `ip_finish_output` by using `NF_HOOK_COND`.
+
+Look at the call of `NF_HOOK_COND` and its signature.
+
+```
+return NF_HOOK_COND(NFPROTO_IPV4, NF_INET_POST_ROUTING,
+          net, sk, skb, NULL, skb->dev,
+          ip_finish_output,
+          !(IPCB(skb)->flags & IPSKB_REROUTED))
+# prototype 
+
+static inline int 
+NF_HOOK_COND(uint8_t pf, unsigned int hook, struct net *net, struct sock *sk,struct sk_buff *skb, struct net_device *in, struct net_device *out,
+int (*okfn)(struct net *, struct sock *, struct sk_buff *), bool cond)
+```
+
+In above, it will call `ip_finish_output` only if `!(IPCB(skb)->flags & IPSKB_REROUTED)` is true otherwise it will call `kfree_skb` through `nf_hook`.
+
+`ip_finish_output` looks like following does 
+- CGROUP related EGRESS
+- discover MTU size
+- GSO related calls if its turned on or send to `ip_fragment`
+- in the end call `ip_finish_output2` 
+
+```
+static int ip_finish_output(struct net *net, struct sock *sk, struct sk_buff *skb)
+{
+  unsigned int mtu;
+  int ret;
+
+  ret = BPF_CGROUP_RUN_PROG_INET_EGRESS(sk, skb);
+  if (ret) {
+    kfree_skb(skb);
+    return ret;
+  }
+
+#if defined(CONFIG_NETFILTER) && defined(CONFIG_XFRM)
+  /* Policy lookup after SNAT yielded a new policy */
+  if (skb_dst(skb)->xfrm) {
+    IPCB(skb)->flags |= IPSKB_REROUTED;
+    return dst_output(net, sk, skb);
+  }
+#endif
+  mtu = ip_skb_dst_mtu(sk, skb);
+  if (skb_is_gso(skb))
+    return ip_finish_output_gso(net, sk, skb, mtu);
+
+  if (skb->len > mtu || (IPCB(skb)->flags & IPSKB_FRAG_PMTU))
+    return ip_fragment(net, sk, skb, mtu, ip_finish_output2);
+
+  return ip_finish_output2(net, sk, skb);
+}
+```
+
+
+
+
+
 
 
 
