@@ -229,7 +229,6 @@ Corking can be setup with two conditions
 - using `setsockopt` systemcall to pass `UDP_CORK` as the socket option
 - pass `MSG_MORE` as one of the flags when calling `send`, `sendto` or `sendmsg`
 
-  
 
 Lets go through the code fragments from `net/ipv4/udp.c`
 
@@ -583,7 +582,7 @@ and most of the time that `output` pointer is calling `ip_output`.
 
 Look at the call of `NF_HOOK_COND` and its signature.
 
-```
+```c
 return NF_HOOK_COND(NFPROTO_IPV4, NF_INET_POST_ROUTING,
           net, sk, skb, NULL, skb->dev,
           ip_finish_output,
@@ -603,7 +602,7 @@ In above, it will call `ip_finish_output` only if `!(IPCB(skb)->flags & IPSKB_RE
 - GSO related calls if its turned on or send to `ip_fragment`
 - in the end call `ip_finish_output2` 
 
-```
+```c
 static int ip_finish_output(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
   unsigned int mtu;
@@ -635,13 +634,260 @@ static int ip_finish_output(struct net *net, struct sock *sk, struct sk_buff *sk
 
 
 
+Note about Path MTU discovery 
+
+- This option is strongly encouraged so lowest MTU on the path will get used for IP packets to avoid any kind of fragmentation. I think we have seen this issue with multicast.
+
+- setup PMTU option with `setsockopt` with `SOL_IP` and `IP_MTU_DISCOVER` and optical value would be `IP_PMTUDISC_DO` means always do path MTU Discovery.
+
+  - If you do above and try to send data larger than PMTU then you get `EMSGSIZE` error.
+  - You can use `getsockopt` with the `SOL_IP` and `IP_MTU` optname to retrieve PMTU for your use. 
+
+- In advance options, you can use `IP_PMTUDISC_PROBE` to tell kernel to set 'Don't Fragment' bit but allows you to send data larger than PMTU (what's point ?)
 
 
 
 
 
+#### IP Neighbour discovery 
+
+Neighbour IP discovery starts under `ip_finish_output2` and transmission to it ends by calling `dev_queue_xmit`.
+
+```c
+static int ip_finish_output2(struct net *net, struct sock *sk, struct sk_buff *skb)
+{
+        struct dst_entry *dst = skb_dst(skb);
+        struct rtable *rt = (struct rtable *)dst;
+        struct net_device *dev = dst->dev;
+        unsigned int hh_len = LL_RESERVED_SPACE(dev);
+        struct neighbour *neigh;
+        u32 nexthop;
+
+        if (rt->rt_type == RTN_MULTICAST) {
+                IP_UPD_PO_STATS(net, IPSTATS_MIB_OUTMCAST, skb->len);
+        } else if (rt->rt_type == RTN_BROADCAST)
+                IP_UPD_PO_STATS(net, IPSTATS_MIB_OUTBCAST, skb->len);
+
+    
+    
+    
+    
+        /* Be paranoid, rather than too clever. */
+        if (unlikely(skb_headroom(skb) < hh_len && dev->header_ops)) {
+                struct sk_buff *skb2;
+
+                skb2 = skb_realloc_headroom(skb, LL_RESERVED_SPACE(dev));
+            
+                    /* snip */
+            
+                consume_skb(skb);
+                skb = skb2;
+        }
+
+    
+        /* snip */
+
+        rcu_read_lock_bh();
+        nexthop = (__force u32) rt_nexthop(rt, ip_hdr(skb)->daddr);
+        neigh = __ipv4_neigh_lookup_noref(dev, nexthop);
+        if (unlikely(!neigh))
+                neigh = __neigh_create(&arp_tbl, &nexthop, dev, false);
+        if (!IS_ERR(neigh)) {
+                int res;
+
+                sock_confirm_neigh(skb, neigh);
+                res = neigh_output(neigh, skb);
+
+                rcu_read_unlock_bh();
+                return res;
+        }
+    
+        rcu_read_unlock_bh();
+
+        net_dbg_ratelimited("%s: No header cache and no neighbour!\n",
+                            __func__);
+        kfree_skb(skb);
+        return -EINVAL;
+}
+
+```
 
 
+
+First two section of this function 
+
+- one which does statistic counter updates for multicast or broadcast
+- second is section where `skb` length gets adjusted for link layer related data
+
+Then it enters in IP neighbour discovery code path.
+
+- Neighbour information stored in `struct neighbour`
+- First it checks for that information with `__ipv4_neigh_lookup_noref` if not found then it calls `__neigh_create`. This is when you are sending data to particualr machine for the first time.
+- Once you get neighbour then it needs to execute `output` function which will guide us to reach to that neighbour. This output function sets up some infromation params for path to neighbour and executes `dev_queue_xmit`. `neigh_output` wraps that functionality.
+
+```C
+static inline int neigh_output(struct neighbour *n, struct sk_buff *skb)
+{
+        const struct hh_cache *hh = &n->hh;
+
+        if ((n->nud_state & NUD_CONNECTED) && hh->hh_len)
+                return neigh_hh_output(hh, skb);
+        else
+                return n->output(n, skb);
+}
+```
+
+There are two paths
+
+- `neigh_hh_output`  called when state of socket is `NUD_CONNECTED` and hardware header is cached. This function does some modification of cache header and calls `dev_queue_xmit`.
+
+- if above conditions are not met then call `n->output` is something need to be pointed at, during progression of `__neigh_create`. Initial, in this progression it gets setup with `neigh_blackhole`. Then depedning on neighbours condition either its up & connected then `neigh->ops_connected_output` and if unsure about neighbours availbiliy due to lack of response to probe for time more that `/proc/sys/net/ipv4/neigh/default/delay_first_probe_time` seconds, then pointed to `neigh->ops->output` . 
+
+- Both `connected_output` and `output` are pointing to `neigh_resolve_output` through `neigh->ops` which is `struct neigh_ops`.
+
+- `neigh_resolve_output` does three things
+
+  - if neighbour is not resolved (`NUD_NONE`) state then it starts ARP request for probing by refering to `/proc/sys/net/ipv4/neigh/default/{app_solicit,mcast_solicit}`.
+  - If its in `NUD_STALE` then it gets updated to `NUD_DELAYED` and time set to probe it later
+  - if its in `NUD_INCOMPLETE` state then check for queued packets are below threshold defined in `/proc/sys/net/ipv4/neigh/default/unres_qlen` by dropping them. `NEIGH_CACHE_STAT_INC` gets used to update stats.
+
+  All three checks later, packet is handed down to `dev_queue_xmit(skb)`.
+
+ 
+
+##NIC Device layer 
+
+```c
+static int __dev_queue_xmit(struct sk_buff *skb, void *accel_priv)
+{
+        struct net_device *dev = skb->dev;
+        struct netdev_queue *txq;
+        struct Qdisc *q;
+        int rc = -ENOMEM;
+
+        skb_reset_mac_header(skb);
+    
+    
+        /* snip */
+
+        /* Disable soft irqs for various locks below. Also
+         * stops preemption for RCU.
+         */
+        rcu_read_lock_bh();
+
+        skb_update_prio(skb);
+
+    
+        /* snip */
+ 
+        txq = netdev_pick_tx(dev, skb, accel_priv);
+    
+        /* to be continued */
+
+}
+```
+
+
+
+`__dev_queue_xmit` stumbles upon selecting a transmit queue by executing `netdev_pick_tx` 
+
+- `netdev_pick_tx` check for availblity of `ndo_select_queue` which is NIC device driver implmentation to select hardware queue.
+- above selection is followed by `__netdev_pick_tx` which gets queue index with `sk_tx_queue_get` which was previously cached on the socket with `sk_tx_queue_set` in the same function.
+- If index returned by `sk_tx_queue_get` is invalid then
+  - either query XPS for new index with `get_xps_queue`
+  - or create new index with `skb_tx_hash`
+  - cache that queue on the socket with `sk_tx_queue_set` 
+
+```C
+static u16 __netdev_pick_tx(struct net_device *dev, struct sk_buff *skb)
+{
+        struct sock *sk = skb->sk;
+        int queue_index = sk_tx_queue_get(sk);
+
+        if (queue_index < 0 || skb->ooo_okay ||
+            queue_index >= dev->real_num_tx_queues) {
+                int new_index = get_xps_queue(dev, skb);
+
+                if (new_index < 0)
+                        new_index = skb_tx_hash(dev, skb);
+
+                if (queue_index != new_index && sk &&
+                    sk_fullsock(sk) &&
+                    rcu_access_pointer(sk->sk_dst_cache))
+                        sk_tx_queue_set(sk, new_index);
+
+                queue_index = new_index;
+        }
+
+        return queue_index;
+}
+
+struct netdev_queue *netdev_pick_tx(struct net_device *dev,
+                                    struct sk_buff *skb,
+                                    void *accel_priv)
+{
+        int queue_index = 0;
+
+#ifdef CONFIG_XPS
+        u32 sender_cpu = skb->sender_cpu - 1;
+
+        if (sender_cpu >= (u32)NR_CPUS)
+                skb->sender_cpu = raw_smp_processor_id() + 1;
+#endif
+
+        if (dev->real_num_tx_queues != 1) {
+                const struct net_device_ops *ops = dev->netdev_ops;
+
+                if (ops->ndo_select_queue)
+                        queue_index = ops->ndo_select_queue(dev, skb, accel_priv,
+                                                            __netdev_pick_tx);
+                else
+                        queue_index = __netdev_pick_tx(dev, skb);
+
+                if (!accel_priv)
+                        queue_index = netdev_cap_txqueue(dev, queue_index);
+        }
+
+        skb_set_queue_mapping(skb, queue_index);
+        return netdev_get_tx_queue(dev, queue_index);
+}
+```
+
+Let look at `__skb_tx_hash` which is wrapped by `skb_tx_hash`, it first looks for forwarding conditions where it already mapped with hash for RX queue, if yes then it uses same hash to calculate TX queue hash.
+
+Later it checks for presence of hardware queue with `dev->num_tc` and try to get priority `qoffset` and `qcount` based on `setsockopt` option of `IP_TOS` which can be retrieved from `skb->priority`. In the end it uses `skb_get_hash` to calculate TX queue. 
+
+
+
+```C
+u16 __skb_tx_hash(const struct net_device *dev, struct sk_buff *skb,
+                  unsigned int num_tx_queues)
+{
+        u32 hash;
+        u16 qoffset = 0;
+        u16 qcount = num_tx_queues;
+
+        if (skb_rx_queue_recorded(skb)) {
+                hash = skb_get_rx_queue(skb);
+                while (unlikely(hash >= num_tx_queues))
+                        hash -= num_tx_queues;
+                return hash;
+        }
+
+        if (dev->num_tc) {
+                u8 tc = netdev_get_prio_tc_map(dev, skb->priority);
+
+                qoffset = dev->tc_to_txq[tc].offset;
+                qcount = dev->tc_to_txq[tc].count;
+        }
+
+        return (u16) reciprocal_scale(skb_get_hash(skb), qcount) + qoffset;
+}
+```
+
+
+
+ 
 
 
 
